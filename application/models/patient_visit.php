@@ -80,5 +80,43 @@ class Patient_Visit extends Doctrine_Record {
 		$patient_visit = $query -> result_array();
 		return $patient_visit;
 	}
+	public function getPill_count_Adherence($start_date, $end_date){
+		$sql="SELECT pv.dispensing_date, pv.patient_id,
+IF(UPPER(rst.Name) ='ART','art','non_art') as service,
+        		    IF(UPPER(g.name) ='MALE','male','female') as gender,
+        		    IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365)<15,'<15', IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365) >= 15 AND FLOOR(DATEDIFF(CURDATE(),p.dob)/365) <= 24,'15_24','>24')) as age,
+                    (AVG(((pv.quantity-(pv.pill_count-pv.months_of_stock))/pv.quantity)*100)) as avg_pill_adh
+                FROM patient_visit pv
+                LEFT JOIN patient p ON p.patient_number_ccc = pv.patient_id
+                LEFT JOIN regimen_service_type rst ON rst.id = p.service
+                LEFT JOIN gender g ON g.id = p.gender 
+                WHERE pv.dispensing_date BETWEEN '$start_date'
+                            AND '$end_date'
+                            GROUP BY patient_id";
+        $query = $this ->db ->query($sql);
+        $results = $query -> result_array();
+        return $results;
+
+	}
+	public function getSelf_Report_Adherence($start_date, $end_date){
+		$sql="SELECT pv.dispensing_date, pv.patient_id,
+AVG((((DATEDIFF(CURDATE(),dispensing_date)) * frequency)- missed_pills)/(((DATEDIFF(CURDATE(),dispensing_date)) * frequency))*100) as self_report,
+                    IF(UPPER(rst.Name) ='ART','art','non_art') as service,
+        		    IF(UPPER(g.name) ='MALE','male','female') as gender,
+        		    IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365)<15,'<15', IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365) >= 15 AND FLOOR(DATEDIFF(CURDATE(),p.dob)/365) <= 24,'15_24','>24')) as age
+
+                FROM patient_visit pv 
+                LEFT JOIN dose d ON d.Name=pv.dose
+                LEFT JOIN patient p ON p.patient_number_ccc = pv.patient_id
+                LEFT JOIN regimen_service_type rst ON rst.id = p.service
+                LEFT JOIN gender g ON g.id = p.gender
+                WHERE pv.dispensing_date BETWEEN '$start_date'
+                            AND '$end_date'";
+		$query=$this->db->query($sql);
+		$results=$query->result_array();
+		return $results;
+	}
+	
+
 
 }

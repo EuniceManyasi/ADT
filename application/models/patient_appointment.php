@@ -47,5 +47,27 @@ class Patient_Appointment extends Doctrine_Record {
 		$patient_appointments = $query -> execute(array(), Doctrine::HYDRATE_ARRAY);
 		return $patient_appointments;
 	}
+	public function get_Appointment_Adherence($start_date,$end_date){
+		$sql = "SELECT 
+                    pa.appointment,
+                    pa.patient,
+                    IF(UPPER(rst.Name) ='ART','art','non_art') as service,
+        		    IF(UPPER(g.name) ='MALE','male','female') as gender,
+        		    IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365)<15,'<15', IF(FLOOR(DATEDIFF(CURDATE(),p.dob)/365) >= 15 AND FLOOR(DATEDIFF(CURDATE(),p.dob)/365) <= 24,'15_24','>24')) as age
+                FROM patient_appointment pa
+                LEFT JOIN patient p ON p.patient_number_ccc = pa.patient
+                LEFT JOIN regimen_service_type rst ON rst.id = p.service
+                LEFT JOIN gender g ON g.id = p.gender 
+                WHERE pa.appointment 
+                BETWEEN '$start_date'
+                AND '$end_date'
+                GROUP BY pa.patient,pa.appointment
+                ORDER BY pa.appointment";
+                
+        $query = $this ->db ->query($sql);
+        $results = $query -> result_array();
+        return $results;
+	}
+
 
 }

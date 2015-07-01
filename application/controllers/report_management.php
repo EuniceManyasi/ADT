@@ -4376,7 +4376,7 @@ class report_management extends MY_Controller {
 		$data['content_view'] = 'reports/graphical_adherence_v';
 		$this -> load -> view('template', $data);
 	}
-
+/*
 	public function getAdherence($type="appointment",$start_date = "", $end_date = "" ,$type = "")
 	{	
 		$ontime = 0;
@@ -4454,7 +4454,7 @@ class report_management extends MY_Controller {
          * e.g. if appointment is 2014-09-01 and visits for this period are 2014-09-03, 2014-09-15, use 2014-09-03
          * Calculate the difference of days between those two dates and find adherence
          */
-       $sql = "SELECT 
+    /*   $sql = "SELECT 
                     pa.appointment,
                     pa.patient,
                     IF(UPPER(rst.Name) ='ART','art','non_art') as service,
@@ -4676,6 +4676,308 @@ class report_management extends MY_Controller {
 		$data['chartType'] = 'column';
 		$data['title'] = 'Chart';
 		$data['chartTitle'] = 'Adherence By '.ucwords($type).' Between '.date('d/M/Y', strtotime($start_date)).' And '.date('d/M/Y', strtotime($end_date));
+		$data['categories'] = $categories;
+		$data['xAxix'] = 'Status';
+		$data['suffix']= '';
+		$data['yAxix'] = 'Totals';
+		$data['resultArray'] = $resultArray;
+		$this -> load -> view('graph_v', $data);
+	}*/
+
+	public function getAdherence($type="appointment",$start_date = "", $end_date = "" ,$chart_type = "")
+	{	
+		$ontime = 0;
+		$missed = 0;
+		$defaulter = 0;
+		$lost_to_followup = 0;
+		$overview_total = 0;
+		$art_total = 0;
+		$non_art_total = 0;
+		$male_total = 0;
+		$female_total = 0;
+		$fifteen_total = 0;
+		$over_fifteen_total = 0;
+		$twenty_four_total = 0;
+		$adherence = array( 
+						'total' => 0,
+			            'on_time' => 0,
+			            'missed' => 0,
+			            'defaulter'=> 0,
+			            'lost_to_followup'=> 0);
+		$art_adherence['art']  = array( 
+			                        'total' => 0,
+						            'on_time' => 0,
+						            'missed' => 0,
+						            'defaulter'=> 0,
+						            'lost_to_followup'=> 0);
+		$art_adherence['non_art']  = array( 
+				                        'total' => 0,
+							            'on_time' => 0,
+							            'missed' => 0,
+							            'defaulter'=> 0,
+							            'lost_to_followup'=> 0);
+		$gender_adherence['male']  = array( 
+			                        'total' => 0,
+						            'on_time' => 0,
+						            'missed' => 0,
+						            'defaulter'=> 0,
+						            'lost_to_followup'=> 0);
+		$gender_adherence['female']  = array( 
+			                            'total' => 0,
+							            'on_time' => 0,
+							            'missed' => 0,
+							            'defaulter'=> 0,
+							            'lost_to_followup'=> 0);
+		$age_adherence['<15']  = array( 
+			                        'total' => 0,
+						            'on_time' => 0,
+						            'missed' => 0,
+						            'defaulter'=> 0,
+						            'lost_to_followup'=> 0);
+		$age_adherence['15_24']  = array( 
+			                            'total' => 0,
+							            'on_time' => 0,
+							            'missed' => 0,
+							            'defaulter'=> 0,
+							            'lost_to_followup'=> 0);
+		$age_adherence['>24']  = array( 
+			                            'total' => 0,
+							            'on_time' => 0,
+							            'missed' => 0,
+							            'defaulter'=> 0,
+							            'lost_to_followup'=> 0);
+        
+        /*
+         * Get all appointments for a patient in selected period
+         * For each appointment, get corresponding visit that is equal or greater than date of appointment
+         * e.g. if appointment is 2014-09-01 and visits for this period are 2014-09-03, 2014-09-15, use 2014-09-03
+         * Calculate the difference of days between those two dates and find adherence
+
+         */
+
+        if ( $type=="pill_count") {
+      $results=Patient_Visit::getPill_count_Adherence($start_date, $end_date);
+      
+        }
+       else if ($type=="appointment") {
+ 
+        $results=Patient_Appointment::get_Appointment_Adherence($start_date,$end_date);
+    }
+    else if ($type=="self_report"){
+    	$results=Patient_Visit::getSelf_Report_Adherence($start_date,$end_date);
+    	echo "<pre>";
+    	print_r($results);die();
+  
+    }
+    
+        if($results)
+        {   
+        	foreach($results as $result){
+        		$patient = $result['patient'];
+        		$appointment = $result['appointment'];
+        		$service = $result['service'];
+	            $gender = $result['gender'];
+	            $age = $result['age'];
+	            $pill_count = $result['avg_pill_adh'];
+
+
+	            $consumed=$result['expected_consumption'];
+    			$missed=$result['missed_pills'];
+
+    			/*$self_report=((($consumed-$missed)/$consumed)*100);
+
+    			$sql="";*/
+    			
+	            
+
+            	$sql = "SELECT 
+        		            DATEDIFF('$appointment',pv.dispensing_date) as no_of_days
+	                    FROM v_patient_visits pv
+	                    WHERE pv.patient_id='$patient'
+	                    AND pv.dispensing_date >= '$appointment'
+	                    GROUP BY pv.patient_id,pv.dispensing_date
+	                    ORDER BY pv.dispensing_date ASC
+	                    LIMIT 1";
+	            $query = $this ->db ->query($sql);
+	            $results = $query -> result_array();
+	            $period = 90;
+	            if($results)
+	            {
+	            	$period = $results[0]['no_of_days'];
+	            }
+
+
+		        if($chart_type == "overview")
+	            {
+		            //Add period to array
+		            if(($period <= 3) || ($pill_count >= 95)){
+		               $ontime++;
+	                   $adherence['on_time'] = $ontime;
+		            }
+		            else if(($period > 3 && $period <= 14) || ($pill_count >=90 && $pill_count <95)) {
+		               $missed++;
+		               $adherence['missed'] = $missed++;
+		            }
+		            else if(($period >= 15 && $period <= 89) || ($pill_count >= 80 && $pill_count <= 90)){
+		               $defaulter++;
+		               $adherence['defaulter'] = $defaulter;
+		            }
+		            else{
+		               $lost_to_followup++;
+		               $adherence['lost_to_followup'] = $lost_to_followup;
+		            } 
+		            $overview_total++;
+		        }
+		        else if($chart_type == "service")
+	            {         
+               	    //Add period to array
+		            if(($period <= 3) || ($pill_count >= 95)){
+		               $ontime++;
+	                   $art_adherence[$service]['on_time'] = $ontime;
+		            }
+		            else if(($period > 3 && $period <= 14) || ($pill_count >=90 && $pill_count <95)){
+		               $missed++;
+		               $art_adherence[$service]['missed'] = $missed++;
+		            }
+		            else if(($period >= 15 && $period <= 89) || ($pill_count >= 80 && $pill_count <= 90)){
+		               $defaulter++;
+		               $art_adherence[$service]['defaulter'] = $defaulter;
+		            }
+		            else{
+		               $lost_to_followup++;
+		               $art_adherence[$service]['lost_to_followup'] = $lost_to_followup;
+		            } 
+	            } 
+	            else if($chart_type == "gender")
+	            {         
+               	    //Add period to array
+		            if(($period <= 3) || ($pill_count >= 95)){
+		               $ontime++;
+	                   $gender_adherence[$gender]['on_time'] = $ontime;
+		            }
+		            else if(($period > 3 && $period <= 14) || ($pill_count >=90 && $pill_count <95)){
+		               $missed++;
+		               $gender_adherence[$gender]['missed'] = $missed++;
+		            }
+		            else if(($period >= 15 && $period <= 89) || ($pill_count >= 80 && $pill_count <= 90)){
+		               $defaulter++;
+		               $gender_adherence[$gender]['defaulter'] = $defaulter;
+		            }
+		            else{
+		               $lost_to_followup++;
+		               $gender_adherence[$gender]['lost_to_followup'] = $lost_to_followup;
+		            } 
+	            } 
+	            else if($chart_type == "age")
+	            {         
+               	    //Add period to array
+		            if(($period <= 3) || ($pill_count >= 95)){
+		               $ontime++;
+	                   $age_adherence[$age]['on_time'] = $ontime;
+		            }
+		            else if(($period > 3 && $period <= 14) || ($pill_count >=90 && $pill_count <95)){
+		               $missed++;
+		               $age_adherence[$age]['missed'] = $missed++;
+		            }
+		            else if(($period >= 15 && $period <= 89) || ($pill_count >= 80 && $pill_count <= 90)){
+		               $defaulter++;
+		               $age_adherence[$age]['defaulter'] = $defaulter;
+		            }
+		            else{
+		               $lost_to_followup++;
+		               $age_adherence[$age]['lost_to_followup'] = $lost_to_followup;
+		            }
+	            } 
+            }
+	        if($chart_type == "overview")
+		    {   
+		    	$adherence['total'] = $overview_total;
+	            $data_array = $adherence;
+		    }
+		    else if($chart_type == "service")
+		    {   
+				foreach ($art_adherence as $column=>$values) {
+					foreach ($values as $value) {
+						if($column == "art")
+			            {
+	                       $art_total+=$value;
+			            }
+			            else
+			            {
+	                       $non_art_total+=$value;
+			            }
+					}
+				}
+				$art_adherence['art']['total'] = $art_total;	
+				$art_adherence['non_art']['total'] = $non_art_total;            
+				$data_array = $art_adherence;
+		    }
+		    else if($chart_type == "gender")
+		    {   
+                foreach ($gender_adherence as $column=>$values) {
+					foreach ($values as $value) {
+						if($column == "male")
+			            {
+	                       $male_total+=$value;
+			            }
+			            else
+			            {
+	                       $female_total+=$value;
+			            }
+					}
+				}
+		    	$gender_adherence['male']['total'] = $male_total;	
+				$gender_adherence['female']['total'] = $female_total; 
+	            $data_array = $gender_adherence;
+		    }
+		    else if($chart_type == "age")
+		    {   
+		    	foreach ($age_adherence as $column=>$values) {
+					foreach ($values as $value) {
+						if($column == "<15")
+			            {
+	                       $fifteen_total+=$value;
+			            }
+			            else if($column == "15_24")
+			            {
+	                       $over_fifteen_total+=$value;
+			            }
+			            else
+			            {
+	                       $twenty_four_total+=$value;
+			            }
+					}
+				}
+				$age_adherence['<15']['total'] = $fifteen_total;	
+				$age_adherence['15_24']['total'] = $over_fifteen_total; 
+				$age_adherence['>24']['total'] = $twenty_four_total; 	            
+				$data_array = $age_adherence;
+		    }
+		    foreach($data_array as $index => $mydata)
+		    {
+		    	if($chart_type == 'overview')
+		    	{   
+		    		$main_array = array();
+		    		$temp_array['name'] = "Status";
+		    	    $temp_array['data'] = array_values($data_array);
+		    	    $main_array[]=$temp_array;
+		    	}
+		    	else{
+		    	    $temp_array['name'] = $index;
+		    	    $temp_array['data'] = array_values($mydata);
+		    	    $main_array[]=$temp_array;
+		    	}
+		    }
+        }
+		//chart data
+		$resultArray = json_encode($main_array);
+		$categories = json_encode(array('Total','On Time','Missed','Defaulter','Lost to Followup'));
+		//chart settings
+		$data['resultArraySize'] = 6;
+		$data['container'] = 'chart_sales_'.$chart_type;
+		$data['chartType'] = 'column';
+		$data['title'] = 'Chart';
+		$data['chartTitle'] = 'Adherence By '.ucwords($chart_type).' Between '.date('d/M/Y', strtotime($start_date)).' And '.date('d/M/Y', strtotime($end_date));
 		$data['categories'] = $categories;
 		$data['xAxix'] = 'Status';
 		$data['suffix']= '';
